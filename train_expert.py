@@ -53,7 +53,7 @@ if __name__ == '__main__':
     p.add_argument('--idx', type=int, default=0)
     p.add_argument('--num_steps', type=int, default=10**5)
     p.add_argument('--eval_interval', type=int, default=10**4)
-    p.add_argument('--env_id', type=str, default='Pusher-v4')
+    p.add_argument('--env_id', type=str, default='Reacher-v4')
     p.add_argument('--cuda', action='store_true')
     p.add_argument('--seed', type=int, default=0)
     p.add_argument('--num_modes', type=int, default=6)

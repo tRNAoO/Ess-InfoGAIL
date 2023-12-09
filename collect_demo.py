@@ -52,7 +52,7 @@ if __name__ == '__main__':
     p.add_argument('--idx', type=int, default=0)
     p.add_argument('--weight_dir', type=str, default='weights/')
     p.add_argument('--buffer_dir', type=str, default='buffers/')
-    p.add_argument('--env_id', type=str, default='Pusher-v4')
+    p.add_argument('--env_id', type=str, default='Reacher-v4')
     p.add_argument('--buffer_size', type=int, default=10**6)
     p.add_argument('--rend_env', type=bool, default=False)
     p.add_argument('--std', type=float, default=0.0)

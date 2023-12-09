@@ -121,9 +121,9 @@ if __name__ == '__main__':
     p = argparse.ArgumentParser()
     p.add_argument('--idx', type=int, default=-1, help='Training index')
     p.add_argument('--seed', type=int, default=9, help='Set a random seed')
-    p.add_argument('--env_id', type=str, default='Walker2d-v4',
+    p.add_argument('--env_id', type=str, default='Reacher-v4',
                    help='Environment ID: 2D-Trajectory, Reacher-v4, Pusher-v4, Walker2d-v4, Humanoid-v4')
-    p.add_argument('--num_modes', type=int, default=3, help='Number of behavioral modes')
+    p.add_argument('--num_modes', type=int, default=6, help='Number of behavioral modes')
     p.add_argument('--rend_env', type=bool, default=False, help='Whether to render the environment')
     p.add_argument('--buffer_dir', type=str, default='buffers/', help='Path of the buffer')
     p.add_argument('--classifier_dir', type=str, default='weights/', help='Path of the weights')

@@ -127,8 +127,8 @@ def test(args, model, device, buffer, epoch):
 def main():
     # Training settings
     parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
-    parser.add_argument('--env_id', type=str, default='2D-Trajectory')
-    parser.add_argument('--num_modes', type=int, default=4)
+    parser.add_argument('--env_id', type=str, default='Reacher-v4')
+    parser.add_argument('--num_modes', type=int, default=6)
     parser.add_argument('--batch-size', type=int, default=64, metavar='N',
                         help='input batch size for training (default: 64)')
     parser.add_argument('--test-batch-size', type=int, default=1000, metavar='N',
