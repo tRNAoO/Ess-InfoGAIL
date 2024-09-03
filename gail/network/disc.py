@@ -10,7 +10,7 @@ class GAILDiscrim(nn.Module):
     def __init__(self, state_shape, action_shape, dim_c=6, hidden_units=(100, 100),
                  hidden_activation=nn.Tanh(), reward_i_coef=1.0, reward_us_coef=0.1,
                  reward_ss_coef=0.1, reward_t_coef=0.01, device=None, obs_his_steps=1,
-                 normalizer=None):
+                 normalizer=None, multi_value_num=1):
         super().__init__()
         self.device = device
         self.dim_c = dim_c
@@ -20,6 +20,7 @@ class GAILDiscrim(nn.Module):
         self.reward_t_coef = reward_t_coef
         self.input_dim = (state_shape[0] - dim_c - 1 + action_shape[0])*obs_his_steps
         self.normalizer = normalizer
+        self.multi_value_num = multi_value_num
 
         layers = []
         curr_in_dim = self.input_dim
@@ -72,20 +73,22 @@ class GAILDiscrim(nn.Module):
             prob = 1 / (1 + torch.exp(-d))
 
             # Imitation reward
-            reward_i = self.reward_i_coef * (-torch.log(torch.maximum(1 - prob, torch.tensor(0.0001, device=self.device))))
+            reward_i = -torch.log(torch.maximum(1 - prob, torch.tensor(0.0001, device=self.device)))
 
             # unsupervised reward
-            reward_us = -self.reward_us_coef * self.L1Loss(eps, label_eps)
+            reward_us = -self.L1Loss(eps, label_eps)
 
             log_c = torch.log(c)
             # Semi-supervised reward
-            reward_ss = self.reward_ss_coef * torch.sum(label_c * log_c, dim=-1, keepdim=True)  # skill reward
+            reward_ss = torch.sum(label_c * log_c, dim=-1, keepdim=True)  # skill reward
 
             # Total reward
-            reward = reward_i + reward_us + reward_ss + self.reward_t_coef * reward_t
+            if self.multi_value_num > 1:
+                reward = reward_i + reward_us + reward_ss + reward_t
+            else:
+                reward = self.reward_i_coef * reward_i + self.reward_us_coef * reward_us + self.reward_ss_coef * reward_ss + self.reward_t_coef * reward_t
 
-        return reward, reward_i / (self.reward_i_coef + 1e-10), reward_us / (self.reward_us_coef + 1e-10), \
-            reward_ss / (self.reward_ss_coef + 1e-10), reward_t
+        return reward, reward_i, reward_us, reward_ss, reward_t
 
     def get_disc_logit_weights(self):
         return torch.flatten(self.linear.weight)

@@ -58,10 +58,11 @@ def run(args):
         action_shape=env.action_space.shape,
         device=torch.device("cuda" if args.cuda else "cpu"),
         seed=args.seed,
-        rollout_length=args.rollout_length,
+        update_interval=args.update_interval,
         num_steps=args.num_steps,
+        start_steps=args.start_steps,
         batch_size=args.batch_size,
-        epoch_ppo=args.epoch_ppo,
+        epoch_sac=args.epoch_sac,
         epoch_disc=args.epoch_disc,
         surrogate_loss_coef=args.surrogate_loss_coef,
         disc_grad_penalty=args.disc_grad_penalty,
@@ -73,21 +74,18 @@ def run(args):
         reward_us_coef=args.reward_us_coef,
         reward_ss_coef=args.reward_ss_coef,
         reward_t_coef=args.reward_t_coef,
-        info_max_coef1=args.info_max_coef1,
-        info_max_coef2=args.info_max_coef2,
-        info_max_coef3=args.info_max_coef3,
+        multi_value_num=args.multi_value_num,
+        info_max_coef=args.info_max_coef,
+        prior_soft_coef=args.prior_soft_coef,
         dim_c=args.num_modes,
         lr_actor=args.lr_actor,
         lr_critic=args.lr_critic,
-        lr_prior=args.lr_prior,
         lr_disc=args.lr_disc,
         lr_q=args.lr_q,
-        auto_lr=args.auto_lr,
-        epoch_prior=args.epoch_prior,
         use_obs_norm=args.use_obs_norm,
         obs_horizon=args.obs_horizon,
         obs_his_steps=args.obs_his_steps,
-        begin_weight=args.begin_weight
+        begin_rim=args.begin_rim
     )
 
     # Path to load model
@@ -131,10 +129,10 @@ if __name__ == '__main__':
     p.add_argument('--algo', type=str, default='Ess-InfoGAIL', help='Which algorithm to use')
     p.add_argument('--cuda', action='store_true', help='Whether to use GPU')
     p.add_argument('--use_obs_norm', action='store_true', help='Whether to normalize the observations')
-    p.add_argument('--auto_lr', type=bool, default=True, help='Whether to use automatic learning rates')
-    p.add_argument('--rollout_length', type=int, default=5000)
+    p.add_argument('--update_interval', type=int, default=5000)
     p.add_argument('--batch_size', type=int, default=1000)
-    p.add_argument('--num_steps', type=int, default=2000000)
+    p.add_argument('--num_steps', type=int, default=5000000)
+    p.add_argument('--start_steps', type=int, default=10000)
     p.add_argument('--eval_interval', type=int, default=200000)
     p.add_argument('--obs_horizon', type=int, default=8)
     p.add_argument('--obs_his_steps', type=int, default=1)
@@ -145,20 +143,18 @@ if __name__ == '__main__':
     p.add_argument('--disc_coef', type=float, default=20)
     p.add_argument('--us_coef', type=float, default=1.0)
     p.add_argument('--ss_coef', type=float, default=4.0)
-    p.add_argument('--info_max_coef1', type=float, default=3.0)
-    p.add_argument('--info_max_coef2', type=float, default=0.05)
-    p.add_argument('--info_max_coef3', type=float, default=0.5)
-    p.add_argument('--begin_weight', type=int, default=20)
+    p.add_argument('--info_max_coef', type=float, default=2.0)
+    p.add_argument('--prior_soft_coef', type=float, default=1e-3)
+    p.add_argument('--begin_rim', type=int, default=20)
+    p.add_argument('--multi_value_num', type=int, default=1)
     p.add_argument('--reward_i_coef', type=float, default=1.0)
-    p.add_argument('--reward_us_coef', type=float, default=0.1)
-    p.add_argument('--reward_ss_coef', type=float, default=0.1)
-    p.add_argument('--reward_t_coef', type=float, default=0.005)
-    p.add_argument('--epoch_ppo', type=int, default=20)
+    p.add_argument('--reward_us_coef', type=float, default=0.2)
+    p.add_argument('--reward_ss_coef', type=float, default=0.2)
+    p.add_argument('--reward_t_coef', type=float, default=0.01)
+    p.add_argument('--epoch_sac', type=int, default=50)
     p.add_argument('--epoch_disc', type=int, default=50)
-    p.add_argument('--epoch_prior', type=int, default=1)
     p.add_argument('--lr_actor', type=float, default=3e-3)
     p.add_argument('--lr_critic', type=float, default=3e-3)
-    p.add_argument('--lr_prior', type=float, default=3e-3)
     p.add_argument('--lr_disc', type=float, default=5e-3)
     p.add_argument('--lr_q', type=float, default=1e-2)
     args = p.parse_args()

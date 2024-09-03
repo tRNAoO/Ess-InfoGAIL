@@ -36,11 +36,11 @@ def calculate_gae(values, rewards, dones, tm_dones, next_values, gamma, lambd):
 
 class PPO(Algorithm):
 
-    def __init__(self, state_shape, action_shape, device, seed, gamma=0.995, rollout_length=2048,  mix_buffer=20,
+    def __init__(self, state_shape, action_shape, device, seed, gamma=0.995, update_interval=2048,  mix_buffer=20,
                  learning_rate=1e-3, units_actor=(64, 64), units_critic=(64, 64), epoch_ppo=10, clip_eps=0.2,
                  lambd=0.97, max_grad_norm=1.0, desired_kl=0.01, surrogate_loss_coef=2., value_loss_coef=5.,
                  entropy_coef=0., bounds_loss_coef=10., dim_c=6, obs_horizon=8, lr_actor=1e-3, lr_critic=1e-3,
-                 lr_prior=1e-3, auto_lr=True, epoch_prior=20):
+                 lr_prior=1e-3, auto_lr=True, epoch_prior=20, multi_value_num=4):
         super().__init__(state_shape, action_shape, device, seed, gamma)
 
         self.learning_rate = learning_rate
@@ -49,10 +49,11 @@ class PPO(Algorithm):
         self.lr_prior = lr_prior
         self.auto_lr = auto_lr
         self.epoch_prior = epoch_prior
+        self.multi_value_num = multi_value_num
 
         # Rollout buffer.
         self.buffer = RolloutBuffer(
-            buffer_size=rollout_length,
+            buffer_size=update_interval,
             state_shape=state_shape,
             action_shape=action_shape,
             device=device,
@@ -69,14 +70,16 @@ class PPO(Algorithm):
         ).to(device)
 
         # Critic.
-        self.critic = StateFunction(
-            state_shape=state_shape,
-            hidden_units=units_critic,
-            hidden_activation=nn.Tanh()
-        ).to(device)
+        self.critic_set = []
+        for i in range(self.multi_value_num):
+            self.critic_set.append(StateFunction(
+                state_shape=state_shape,
+                hidden_units=units_critic,
+                hidden_activation=nn.Tanh()
+            ).to(device))
 
         self.learning_steps_ppo = 0
-        self.rollout_length = rollout_length
+        self.update_interval = update_interval
         self.epoch_ppo = epoch_ppo
         self.clip_eps = clip_eps
         self.lambd = lambd
@@ -98,7 +101,9 @@ class PPO(Algorithm):
         self.sample_latent_eps()
 
         self.optim_actor = Adam([{'params': self.actor.parameters()}], lr=lr_actor)
-        self.optim_critic = Adam([{'params': self.critic.parameters()}], lr=lr_critic)
+        self.optim_critic_set = []
+        for i in range(self.multi_value_num):
+            self.optim_critic_set.append(Adam([{'params': self.critic_set[i].parameters()}], lr=lr_critic))
         self.optim_prior = Adam([{'params': self.prior_parameters}], lr=lr_prior)
 
         self.obs_horizon = obs_horizon
@@ -106,7 +111,7 @@ class PPO(Algorithm):
         self.action_his = np.zeros((obs_horizon, action_shape[0]))
 
     def is_update(self, step):
-        return step % self.rollout_length == 0
+        return step % self.update_interval == 0
 
     def sample_latent_eps(self, batch_size=1):
         self.latent_eps = torch.tensor(np.random.rand(batch_size, 1) * 2. - 1., dtype=torch.float32, device=self.device)
@@ -163,18 +168,32 @@ class PPO(Algorithm):
         self.update_ppo(
             states, actions, rewards, dones, terminated, log_pis, next_states, mus, sigmas, writer)
 
-    def update_ppo(self, states, actions, rewards, dones, terminated, log_pis, next_states, mus, sigmas,
+    def update_ppo(self, states, actions, rewards_set, dones, terminated, log_pis, next_states, mus, sigmas,
                    writer):
-        with torch.no_grad():
-            values = self.critic(states.detach())
-            next_values = self.critic(next_states.detach())
+        values_set, next_values_set = [], []
+        for i in range(self.multi_value_num):
+            with torch.no_grad():
+                values_set.append(self.critic_set[i](states.detach()))
+                next_values_set.append(self.critic_set[i](next_states.detach()))
 
-        targets, gaes = calculate_gae(
-            values, rewards, dones, terminated, next_values, self.gamma, self.lambd)
+        targets_set, gaes_set = [], []
+        for i in range(self.multi_value_num):
+            targets, gaes = calculate_gae(
+                values_set[i], rewards_set[i], dones, terminated, next_values_set[i], self.gamma, self.lambd)
+            targets_set.append(targets)
+            gaes_set.append(gaes)
+
+        if self.multi_value_num <= 1:
+            gaes_mean = gaes_set[0]
+        else:
+            # gaes_mean = torch.mean(torch.stack(gaes_set), dim=0)
+            gaes_mean = torch.stack(gaes_set)
+            gaes_mean = (self.disc.reward_i_coef*gaes_mean[0, ...] + self.disc.reward_us_coef*gaes_mean[1, ...] +
+                         self.disc.reward_ss_coef*gaes_mean[2, ...] + self.disc.reward_t_coef*gaes_mean[3, ...])
 
         for i in range(self.epoch_ppo):
             self.learning_steps_ppo += 1
-            self.update_critic(states.detach(), targets, writer)
+            self.update_critics(states.detach(), targets_set, writer)
             # To minimize computational time, we restrict the update of the latent skill distribution to
             # only the first iteration of policy updates.
             if i < self.epoch_prior:
@@ -183,20 +202,21 @@ class PPO(Algorithm):
                 retain_graph = False
                 states = states.data
 
-            self.update_actor(states, actions, log_pis, gaes, mus, sigmas, writer, retain_graph=retain_graph)
+            self.update_actor(states, actions, log_pis, gaes_mean, mus, sigmas, writer, retain_graph=retain_graph)
 
-    def update_critic(self, states, targets, writer):
-        loss_critic = (self.critic(states) - targets).pow_(2).mean()
-        loss_critic = loss_critic * self.value_loss_coef
+    def update_critics(self, states, targets_set, writer):
+        for i in range(len(self.critic_set)):
+            loss_critic = (self.critic_set[i](states) - targets_set[i]).pow_(2).mean()
+            loss_critic = loss_critic * self.value_loss_coef
 
-        self.optim_critic.zero_grad()
-        loss_critic.backward(retain_graph=False)
-        nn.utils.clip_grad_norm_(self.critic.parameters(), self.max_grad_norm)
-        self.optim_critic.step()
+            self.optim_critic_set[i].zero_grad()
+            loss_critic.backward(retain_graph=False)
+            nn.utils.clip_grad_norm_(self.critic_set[i].parameters(), self.max_grad_norm)
+            self.optim_critic_set[i].step()
 
-        if self.learning_steps_ppo % self.epoch_ppo == 0:
-            writer.add_scalar(
-                'Loss/critic', loss_critic.item(), self.learning_steps)
+            if self.learning_steps_ppo % self.epoch_ppo == 0:
+                writer.add_scalar(
+                    'Loss/critic_{}'.format(i), loss_critic.item(), self.learning_steps)
 
     def update_actor(self, states, actions, log_pis_old, gaes, mus_old, sigmas_old, writer, retain_graph=False):
         self.optim_actor.zero_grad()
@@ -232,8 +252,9 @@ class PPO(Algorithm):
 
                 for param_group in self.optim_actor.param_groups:
                     param_group['lr'] = self.lr_actor
-                for param_group in self.optim_critic.param_groups:
-                    param_group['lr'] = self.lr_critic
+                for optim_critic in self.optim_critic_set:
+                    for param_group in optim_critic.param_groups:
+                        param_group['lr'] = self.lr_critic
                 for param_group in self.optim_d.param_groups:
                     param_group['lr'] = self.lr_actor
 

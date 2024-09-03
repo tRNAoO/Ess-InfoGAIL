@@ -50,7 +50,7 @@ class Trainer:
         for step in pbar:
             step = step + 1
             # Run a step
-            state = self.algo.step(self.env, state)
+            state = self.algo.step(self.env, state, step)
 
             # Update the model
             if self.algo.is_update(step):
@@ -75,6 +75,7 @@ class Trainer:
                     f'mean_entropy: {mean_entropy:<6.4f}   '
                     f'mean_nmi: {mean_nmi:<6.4f}   '
                     f'avg_task_reward: {avg_task_reward:<6.4f}   '
+                    f'prior: {np.round(self.algo.prior_parameters, 4)}'
                 )
 
     def evaluate_ess_info_gail(self):

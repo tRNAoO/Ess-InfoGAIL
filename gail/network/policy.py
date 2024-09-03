@@ -44,11 +44,14 @@ class StateDependentPolicy(nn.Module):
             hidden_units=hidden_units,
             hidden_activation=hidden_activation
         )
+        self.means = None
+        self.log_stds = None
 
     def forward(self, states):
         return torch.tanh(self.net(states).chunk(2, dim=-1)[0])
 
     def sample(self, states):
-        means, log_stds = self.net(states).chunk(2, dim=-1)
-        log_stds = torch.clamp(log_stds, -20, 2)
-        return reparameterize(means, log_stds)
+        self.means, self.log_stds = self.net(states).chunk(2, dim=-1)
+        self.log_stds = torch.clamp(self.log_stds, -20, 2)
+        actions, log_pis = reparameterize(self.means, self.log_stds)
+        return actions, log_pis

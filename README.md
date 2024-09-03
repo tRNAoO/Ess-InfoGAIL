@@ -2,6 +2,11 @@
 
 [Ess-InfoGAIL: Semi-supervised Imitation Learning from Imbalanced Demonstrations](https://openreview.net/pdf?id=jxhUNLoi4m)
 
+The current branch is a simplified version of Ess-InfoGAIL, which incorporates some tricks added in subsequent work. We found these modifications to be helpful for the algorithm's performance and stability. The main changes are as follows:
+
+1. Using $Q^c$ to estimate the prior category distribution of the data while removing the KL term from RIM, which makes the algorithm more stable.
+2. Replacing PPO with SAC, which provides a performance improvement (whether to use PPO or SAC depends on the specific scenario).
+
 This repository contains the PyTorch implementation of Ess-InfoGAIL, a method for imitation learning from **raw expert demonstrations** without the need for:
 
 * Labeling behavior modes (e.g., human walking, running, jumping, etc.) for each data point.
@@ -13,12 +18,20 @@ This repository contains the PyTorch implementation of Ess-InfoGAIL, a method fo
 ## Installation
 To get started, create a new conda environment (optional) using the following command:
 ```bash
-conda create -n [env_name] python=3.8
+conda create -n [env_name] python=3.7
 ```
 
 Next, install the external dependencies for this repository:
 ```bash
 pip install -r requirements.txt
+```
+If you see an error like this:
+```bash
+Could not find a version that satisfies the requirement torch==1.13.0+cu116
+```
+Run the following command to install pytorch:
+```bash
+pip install torch==1.13.0+cu116 -f https://download.pytorch.org/whl/torch_stable.html
 ```
 
 ## Train a model
@@ -57,7 +70,7 @@ python train_imitation.py --idx 1 --env_id Reacher-v4 --num_modes 6 --num_steps 
 ## Run a trained model
 A pre-trained model can be run using the following command:
 ```
-python train_imitation.py --env_id Reacher-v4 --num_modes 6 --model_path ./weights/Reacher-v4_6_modes_results/model.pth --rend_env True
+python train_imitation.py --env_id Reacher-v4 --num_modes 6 --start_steps 0 --rend_env True --model_dir ./weights/Reacher-v4_6_modes_results/model.pth
 ```
 
 ## Citation
